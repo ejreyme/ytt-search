@@ -1,0 +1,41 @@
+== docker compose
+
+=== docker compose build everything
+
+`docker-compose up --build`
+
+=== docker compose build backend
+
+`docker-compose build flask-backend`
+
+=== docker compose build frontend
+
+`docker-compose build react-frontend`
+
+== docker backend shell
+
+`docker exec -it ytt-search-flask-backend-1 sh`
+
+=== curl frontend within docker
+
+`curl http://react-frontend:80`
+
+=== redis-cli
+
+`redis-cli -h redis`
+
+Run `PING` in the Redis shell, and it will return `PONG`
+
+== docker frontend shell
+
+`docker exec -it ytt-search-react-frontend-1 sh`
+
+=== curl backend within docker
+
+`curl http://flask-backend:9003`
+
+== docker redis-cli
+
+`docker exec -it ytt-search-redis-1 redis-cli`
+
+`KEYS *`
