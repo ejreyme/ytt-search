@@ -1,17 +1,14 @@
-version: '3.8'
-
 services:
   react-frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:80" # Serve static files via NGINX on port 3000
+      - "3005:80"
     environment:
       - NODE_ENV=production
     depends_on:
-      flask-backend:
-        condition: service_healthy # Wait for Flask to be healthy
+      - flask-backend
     networks:
       - app-network
 
@@ -19,6 +16,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    ports:
+      - "9003:8080"
     environment:
       - FLASK_ENV=production
       - REDIS_URL=redis://redis:6379 # Connect Flask to Redis
@@ -44,5 +43,16 @@ services:
       timeout: 5s
       retries: 3
 
+  redis-dev:
+    image: redis:7   # Use the Redis 7 image
+    ports:
+      - "6379:6379"  # Map Redis to the default port
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
 networks:
-  app-network: {} # Shared network for internal communication
+  app-network:
+    driver: bridge

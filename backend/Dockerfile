@@ -1,5 +1,4 @@
 # Use a lightweight Python image
-#FROM python:3.9-slim
 FROM python:3.9-slim-bullseye
 
 # Install curl
@@ -22,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app
 
 # Expose the Flask app port
-EXPOSE 9003
+EXPOSE 8080
 
 # Run the app with Gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:9003", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "wsgi:app"]
