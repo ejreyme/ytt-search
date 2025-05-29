@@ -39,3 +39,8 @@ Run `PING` in the Redis shell, and it will return `PONG`
 `docker exec -it ytt-search-redis-1 redis-cli`
 
 `KEYS *`
+
+== BUILD for nas amd64 architecture
+docker buildx build --platform=linux/amd64 -t joonyor/ytt-react-amd64-image .
+
+docker buildx build --platform=linux/amd64 -t joonyor/ytt-flask-amd64-image .

@@ -10,7 +10,7 @@ __pycache__/
 logs/
 
 # Environment variables and settings
-.env
+.env.production
 .env.*
 *.ini
 *.yaml

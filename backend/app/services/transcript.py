@@ -1,31 +1,76 @@
 # app/services/transcript.py
 import re
+import time
+from functools import wraps
+
 
 from flask import current_app
 from fuzzywuzzy import fuzz
 from youtube_transcript_api import YouTubeTranscriptApi
 
-def get_youtube_video_id(yt_link_input):
+def get_youtube_video_id(url):
+    """Extract the video ID from a YouTube URL"""
     try:
-        # Use a regex to validate YouTube URL
-        youtube_url_pattern = re.compile(
-            r"(https?://)?(www\.)?(youtube\.com|youtu\.be)/.+"
-        )
-        if not youtube_url_pattern.match(yt_link_input):
-            raise ValueError("Invalid YouTube URL")
+        # Try to handle it as a URL
+        from urllib.parse import urlparse, parse_qs
 
-        # Extract the video ID
-        if 'v=' in yt_link_input:
-            part_one = yt_link_input.split("v=")[1]
-            video_id = part_one.split("&")[0]
-        elif 'youtu.be/' in yt_link_input:
-            video_id = yt_link_input.split("youtu.be/")[1].split("?")[0]
+        # Check if it's already just a video ID (11-12 characters, alphanumeric + '_', '-')
+        if re.match(r'^[A-Za-z0-9_-]{11,12}$', url):
+            return url
 
-        # Return the extracted video ID
-        return video_id
+        # Parse URL
+        parsed_url = urlparse(url)
+
+        # Handle youtube.com URLs
+        if 'youtube.com' in parsed_url.netloc:
+            query_params = parse_qs(parsed_url.query)
+            if 'v' in query_params:
+                return query_params['v'][0]
+
+        # Handle youtu.be URLs
+        elif 'youtu.be' in parsed_url.netloc:
+            # The path contains the video ID for youtu.be URLs
+            video_id = parsed_url.path.lstrip('/')
+            return video_id
+
+        # No valid YouTube video ID found
+        raise ValueError("Invalid YouTube URL format")
+
     except Exception as e:
-        raise ValueError(f"Could not extract video ID: {str(e)}")
+        current_app.logger.error(f"Error extracting video ID: {str(e)}")
+        raise ValueError(f"Failed to extract YouTube video ID: {str(e)}")
 
+def retry_on_error(max_retries=3, initial_delay=1):
+    """
+    Decorator that retries a function when it raises an exception.
+
+    Args:
+        max_retries: Maximum number of attempts before giving up
+        initial_delay: Initial delay between attempts in seconds
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            current_delay = initial_delay
+
+            while attempts < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    attempts += 1
+                    if attempts == max_retries:
+                        raise
+
+                    print(f"Attempt {attempts} failed: {str(e)}. Retrying in {current_delay} seconds...")
+                    time.sleep(current_delay)
+                    current_delay *= 2  # Exponential backoff
+            return None
+
+        return wrapper
+    return decorator
+
+@retry_on_error(max_retries=3, initial_delay=1)
 def search_transcript_fuzzy(video_id, query, language='en', threshold=80):
     """
     Search through YouTube transcript using fuzzy matching with support for multiple languages.
@@ -40,8 +85,12 @@ def search_transcript_fuzzy(video_id, query, language='en', threshold=80):
         list: Matching segments or dict with error message
     """
     try:
+        # Create an instance of YouTubeTranscriptApi
+        api = YouTubeTranscriptApi()
+
         # Try to get available transcript languages
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        # transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        transcript_list = api.list(video_id)
 
         # Find available languages
         available_languages = [t.language_code for t in transcript_list]
@@ -53,18 +102,18 @@ def search_transcript_fuzzy(video_id, query, language='en', threshold=80):
 
         if language in available_languages:
             # Use requested language
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[language])
+            transcript = api.fetch(video_id, languages=[language])
             used_language = language
             current_app.logger.info(f"Using requested language: {language}")
         elif 'en' in available_languages:
             # Fallback to English
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+            transcript = api.fetch(video_id, languages=['en'])
             used_language = 'en'
             current_app.logger.warning(f"Language '{language}' not available, falling back to English")
         elif available_languages:
             # Use first available language as last resort
             fallback_lang = available_languages[0]
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[fallback_lang])
+            transcript = api.fetch(video_id, languages=[fallback_lang])
             used_language = fallback_lang
             current_app.logger.warning(f"Using first available language: {fallback_lang}")
         else:
@@ -78,18 +127,19 @@ def search_transcript_fuzzy(video_id, query, language='en', threshold=80):
 
         # Search through each segment with fuzzy matching
         for segment in transcript:
-            text = segment['text'].lower()
+            text = segment.text.lower()
             # Calculate similarity score (0-100)
             similarity = fuzz.partial_ratio(query, text)
             if similarity >= threshold:
                 matches.append({
-                    'start': segment['start'],
-                    'text': segment['text'],
-                    'duration': segment['duration'],
+                    'start': segment.start,
+                    'text': segment.text,
+                    'duration': segment.duration,
                     'similarity': similarity,
-                    'language': used_language,  # Include the language used
-                    'link': f'https://youtube.com/watch?v={video_id}&t={int(segment["start"])}'
+                    'language': used_language,
+                    'link': f'https://youtube.com/watch?v={video_id}&t={int(segment.start)}'
                 })
+
 
         # Sort by similarity (highest first)
         matches.sort(key=lambda x: x['similarity'], reverse=True)
@@ -131,4 +181,3 @@ def search_transcript_fuzzy(video_id, query, language='en', threshold=80):
             return {"error": "This video is unavailable or private"}
         else:
             return {"error": f"Error retrieving transcript: {error_message}"}
-

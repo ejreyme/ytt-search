@@ -1,8 +1,6 @@
 services:
   react:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: joonyor/ytt-react-amd64-image
     container_name: react_app
     ports:
       - "9003:9003"
@@ -11,12 +9,10 @@ services:
     depends_on:
       - flask
     networks:
-      - app-network
+      - ytt-network
 
   flask:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: joonyor/ytt-flask-amd64-image
     container_name: flask_app
     ports:
       - "9005:9005"
@@ -25,7 +21,7 @@ services:
     depends_on:
       - redis
     networks:
-      - app-network
+      - ytt-network
 
   redis:
     image: redis:7   # Use the Redis 7 image
@@ -37,8 +33,8 @@ services:
       timeout: 5s
       retries: 3
     networks:
-      - app-network
+      - ytt-network
 
 networks:
-  app-network:
+  ytt-network:
     driver: bridge

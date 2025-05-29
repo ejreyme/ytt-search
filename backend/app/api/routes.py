@@ -23,7 +23,6 @@ def search():
         try:
             video_id = get_youtube_video_id(yt_link_input)
         except ValueError as e:
-            current_app.logger.error(f"Invalid YouTube URL: {yt_link_input}")
             return jsonify({"error": str(e)}), 400
 
         current_app.logger.info(f"video_id: {video_id}, query: {query}, language: {language}, threshold: {threshold}")
